@@ -1,0 +1,67 @@
+name: Build Custom HLS Master Playlist (Stream CNA)
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  build-playlist:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Deno & yt-dlp
+        run: |
+          curl -fsSL https://deno.land/install.sh | sh
+          echo "/home/runner/.deno/bin" >> $GITHUB_PATH
+
+          sudo wget https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -O /usr/local/bin/yt-dlp
+          sudo chmod a+rx /usr/local/bin/yt-dlp
+
+      - name: Setup Cookies File
+        env:
+          COOKIES_DATA: ${{ secrets.YOUTUBE_COOKIES }}
+        run: |
+          echo "$COOKIES_DATA" > cookies.txt
+
+      - name: Extract Video & Audio Streams and Build Master M3U8
+        run: |
+          # Dapatkan pautan Video (Baris 1) dan Audio (Baris 2)
+          URLS=$(yt-dlp --cookies cookies.txt --js-runtimes deno -g "https://www.youtube.com/live/XWq5kBlakcQ")
+          
+          VIDEO_URL=$(echo "$URLS" | sed -n '1p')
+          AUDIO_URL=$(echo "$URLS" | sed -n '2p')
+
+          if [ -z "$VIDEO_URL" ]; then
+            echo "Stream offline / Tiada pautan diperolehi."
+            echo "#EXTM3U" > cna.m3u8
+          else
+            # Jika YouTube memberikan pautan gabungan tunggal
+            if [ -z "$AUDIO_URL" ]; then
+              cat <<EOF > cna.m3u8
+#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=3000000
+$VIDEO_URL
+EOF
+            else
+              # Jika YouTube memisahkan Video & Audio, bina Master Playlist rasmi
+              cat <<EOF > cna.m3u8
+#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio-main",NAME="English/Main",DEFAULT=YES,AUTOSELECT=YES,URI="$AUDIO_URL"
+#EXT-X-STREAM-INF:BANDWIDTH=3000000,AUDIO="audio-main"
+$VIDEO_URL
+EOF
+            fi
+          fi
+
+      - name: Commit and Push to Github
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add cna.m3u8
+          git commit -m "Auto-update HLS Master Playlist for cna.m3u8 [skip ci]" || exit 0
+          git push
+
