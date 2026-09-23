@@ -32,33 +32,22 @@ jobs:
 
       - name: Extract Video & Audio Streams and Build Master M3U8
         run: |
-          # Dapatkan pautan Video (Baris 1) dan Audio (Baris 2)
-          # '|| true' ditambah supaya skrip tidak crash jika yt-dlp memulangkan warning/error
           URLS=$(yt-dlp --cookies cookies.txt --js-runtimes deno -g "https://www.youtube.com/live/XWq5kBlakcQ" || true)
           
           VIDEO_URL=$(echo "$URLS" | sed -n '1p')
           AUDIO_URL=$(echo "$URLS" | sed -n '2p')
 
           if [ -z "$VIDEO_URL" ]; then
-            echo "Stream offline / Tiada pautan diperolehi."
             echo "#EXTM3U" > cna.m3u8
+          elif [ -z "$AUDIO_URL" ]; then
+            echo "#EXTM3U" > cna.m3u8
+            echo "#EXT-X-STREAM-INF:BANDWIDTH=3000000" >> cna.m3u8
+            echo "$VIDEO_URL" >> cna.m3u8
           else
-            # Jika YouTube memberikan pautan gabungan tunggal
-            if [ -z "$AUDIO_URL" ]; then
-              cat <<EOF > cna.m3u8
-#EXTM3U
-#EXT-X-STREAM-INF:BANDWIDTH=3000000
-$VIDEO_URL
-EOF
-            else
-              # Jika YouTube memisahkan Video & Audio, bina Master Playlist rasmi
-              cat <<EOF > cna.m3u8
-#EXTM3U
-#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio-main",NAME="English/Main",DEFAULT=YES,AUTOSELECT=YES,URI="$AUDIO_URL"
-#EXT-X-STREAM-INF:BANDWIDTH=3000000,AUDIO="audio-main"
-$VIDEO_URL
-EOF
-            fi
+            echo "#EXTM3U" > cna.m3u8
+            echo '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio-main",NAME="English/Main",DEFAULT=YES,AUTOSELECT=YES,URI="'"$AUDIO_URL"'"' >> cna.m3u8
+            echo '#EXT-X-STREAM-INF:BANDWIDTH=3000000,AUDIO="audio-main"' >> cna.m3u8
+            echo "$VIDEO_URL" >> cna.m3u8
           fi
 
       - name: Commit and Push to Github
