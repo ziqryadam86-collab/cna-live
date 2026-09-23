@@ -5,6 +5,9 @@ on:
     - cron: '*/5 * * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-playlist:
     runs-on: ubuntu-latest
@@ -30,7 +33,8 @@ jobs:
       - name: Extract Video & Audio Streams and Build Master M3U8
         run: |
           # Dapatkan pautan Video (Baris 1) dan Audio (Baris 2)
-          URLS=$(yt-dlp --cookies cookies.txt --js-runtimes deno -g "https://www.youtube.com/live/XWq5kBlakcQ")
+          # '|| true' ditambah supaya skrip tidak crash jika yt-dlp memulangkan warning/error
+          URLS=$(yt-dlp --cookies cookies.txt --js-runtimes deno -g "https://www.youtube.com/live/XWq5kBlakcQ" || true)
           
           VIDEO_URL=$(echo "$URLS" | sed -n '1p')
           AUDIO_URL=$(echo "$URLS" | sed -n '2p')
@@ -64,4 +68,4 @@ EOF
           git add cna.m3u8
           git commit -m "Auto-update HLS Master Playlist for cna.m3u8 [skip ci]" || exit 0
           git push
-
+          
